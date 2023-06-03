@@ -266,15 +266,17 @@ plt.legend()
 plt.savefig(os.path.join(model_path, "plots"))
 
 """# Testing"""
+from generation import LLaMA
+import model2 # inference only version
+
 # sys.path.append(os.path.abspath(model_path))
 file = os.path.join(model_path, out_dir, sorted(os.listdir(os.path.join(model_path, out_dir)))[-1])
 checkpoint = torch.load(file)
-model = Transformer(ModelArgs())
+model = model2.Transformer(ModelArgs())
+model.to(device)
 model.load_state_dict(checkpoint, strict=False)
 
 generator = LLaMA(model, tokenizer)
-
-print(dir(tokenizer))
 
 prompts = [
     # For these prompts, the expected answer is the natural continuation of the prompt
@@ -303,8 +305,11 @@ prompts = [
 
           cheese =>""",
 ]
+
+tokens = [(tokenizer(x)['input_ids']) for x in prompts] # match list of list of ints format
+print(tokens)
 results = generator.generate(
-    [tokenizer.encode(x) for x in prompts], max_gen_len=256
+    tokens, max_gen_len=256
 )
 
 for result in results:
