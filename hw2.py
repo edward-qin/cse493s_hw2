@@ -16,6 +16,7 @@ from model import Transformer
 from model import ModelArgs
 from transformers import AutoTokenizer
 from generation import LLaMA
+from lion_pytorch import Lion
 
 
 def setup_model_parallel():
@@ -103,9 +104,9 @@ encoding = tokenizer("Hello I am a human")
 print(tokenizer.vocab_size)
 print(encoding)
 
-eval_dataset = tokenizer(read_file(val_path, entries=10000), padding=True, truncation=True, return_tensors="pt")[
+eval_dataset = tokenizer(read_file(val_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
     'input_ids']
-train_dataset = tokenizer(read_file(train_path, entries=30000), padding=True, truncation=True, return_tensors="pt")[
+train_dataset = tokenizer(read_file(train_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
     'input_ids']
 print(type(eval_dataset))
 eval_dataset.to(device)
@@ -158,7 +159,7 @@ def train(
 
         t0 = time.time()
 
-        input_ids, targets = get_batch(train_dataset)  # type: ignore[union-attr,arg-type]
+        input_ids, targets = get_batch(train_data)  # type: ignore[union-attr,arg-type]
         input_ids = input_ids.to(device)
         targets = targets.to(device)
         logits = model.forward(input_ids, 0)
@@ -207,7 +208,7 @@ def validate(model: torch.nn.Module, val_data: np.ndarray) -> torch.Tensor:
         targets = targets.to(device)
         logits = model.forward(input_ids, 0)
         logits = torch.flatten(logits, start_dim=0, end_dim=1)
-        loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1))
+        loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1), ignore_index=tokenizer._pad_token_type_id)
         loss = loss.detach().cpu().numpy()
         losses[k] = loss.item()
         gc.collect()
@@ -232,7 +233,9 @@ def main():
     torch.cuda.empty_cache()
     model = Transformer(ModelArgs())
     model.to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(beta1, beta2))
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(beta1, beta2))
+    # Ablation study
+    optimizer = Lion(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(beta1, beta2))
 
     train(model, optimizer, train_dataset, eval_dataset, checkpoint=None, iters=501, out_dir=out_dir)
 
