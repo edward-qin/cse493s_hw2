@@ -1,4 +1,5 @@
 fairscale==0.4.13
+lion_pytorch==0.1.2
 matplotlib==3.3.4
 numpy==1.24.3
 sentencepiece==0.1.99
