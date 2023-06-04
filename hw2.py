@@ -207,7 +207,7 @@ def validate(model: torch.nn.Module, val_data: np.ndarray) -> torch.Tensor:
         input_ids, targets = get_batch(val_data)  # type: ignore[union-attr,arg-type]
         input_ids = input_ids.to(device)
         targets = targets.to(device)
-        logits = model.forward(input_ids, 0)
+        logits = model.forward(input_ids, 0, train=True)
         logits = torch.flatten(logits, start_dim=0, end_dim=1)
         loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1), ignore_index=tokenizer._pad_token_type_id)
         loss = loss.detach().cpu().numpy()

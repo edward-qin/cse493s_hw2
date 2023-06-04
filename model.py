@@ -201,7 +201,6 @@ class Transformer(nn.Module):
 
 
     def forward(self, tokens: torch.Tensor, start_pos: int, train=True):
-        import ipdb; ipdb.set_trace()
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         tokens = tokens.to(h.device)
@@ -217,8 +216,10 @@ class Transformer(nn.Module):
             h = layer(h, start_pos, freqs_cis, mask)
         h = self.norm(h)
         if train:
-            output = self.output(h[:, :, :])
+            # bs x seqlen x vocab_size
+            output = self.output(h[:, :, :])  
         else:
-            output = self.output(h[:, -1:, :])  # only compute last logits
+            # bs x vocab_size
+            output = self.output(h[:, -1, :])   # only compute last logits
         # print(output.shape)
         return output.float()
