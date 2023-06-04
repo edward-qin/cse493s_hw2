@@ -43,12 +43,13 @@ def setup_model_parallel():
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-model_path = '.'  # where the model.py files live
-sys.path.append(os.path.abspath(model_path))
+# model_path = '.'  # where the model.py files live
+# sys.path.append(os.path.abspath(model_path))
 
-test_path = os.path.join(model_path, 'test.jsonl.zst')
-val_path = os.path.join(model_path, 'val.jsonl.zst')
-train_path = os.path.join(model_path, '00.jsonl.zst')
+data_path = '/cmlscratch/vsahil1/cse493s-hw2'
+test_path = os.path.join(data_path, 'test.jsonl.zst')
+val_path = os.path.join(data_path, 'val.jsonl.zst')
+train_path = os.path.join(data_path, '00.jsonl.zst')
 print(train_path)
 
 batch_size = 12
@@ -100,14 +101,12 @@ def read_file(file_path, gbs=1.0, entries=10000):
 
 # https://huggingface.co/transformers/v3.0.2/preprocessing.html#base-use
 tokenizer = AutoTokenizer.from_pretrained('bert-base-cased')
-encoding = tokenizer("Hello I am a human")
-print(tokenizer.vocab_size)
-print(encoding)
+# encoding = tokenizer("Hello I am a human")
+# print(tokenizer.vocab_size)
+# print(encoding)
 
-eval_dataset = tokenizer(read_file(val_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
-    'input_ids']
-train_dataset = tokenizer(read_file(train_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
-    'input_ids']
+eval_dataset = tokenizer(read_file(val_path, entries=500), padding=True, truncation=True, return_tensors="pt")['input_ids']
+train_dataset = tokenizer(read_file(train_path, entries=500), padding=True, truncation=True, return_tensors="pt")['input_ids']
 print(type(eval_dataset))
 eval_dataset.to(device)
 train_dataset.to(device)
@@ -118,6 +117,7 @@ def get_batch(data: np.ndarray):
     x = torch.stack([torch.from_numpy((data[i]).numpy()[:-1]) for i in ix])  # first n - 1
     y = torch.stack([torch.from_numpy((data[i]).numpy()[1:]) for i in ix])  # last n - 1
     return x, y
+
 
 print(get_batch(train_dataset))
 
@@ -136,7 +136,7 @@ def train(
 ) -> None:
     train_losses = []
     val_losses = []
-    out_dir = os.path.join(model_path, out_dir)
+    out_dir = os.path.join(out_dir)
     start_iter = 0
     scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
 
@@ -148,6 +148,7 @@ def train(
         model.load_state_dict(checkpoint['model'])
         scheduler.load_state_dict(checkpoint['scheduler'])
 
+    import ipdb; ipdb.set_trace()
     for i in range(start_iter, start_iter + iters):
         # evaluate the loss on train/val sets and write checkpoints
         if i > 0 and i % eval_interval == 0:
@@ -162,7 +163,7 @@ def train(
         input_ids, targets = get_batch(train_data)  # type: ignore[union-attr,arg-type]
         input_ids = input_ids.to(device)
         targets = targets.to(device)
-        logits = model.forward(input_ids, 0)
+        logits = model.forward(input_ids, 0, train=True)
         logits = torch.flatten(logits, start_dim=0, end_dim=1)
 
         loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1), ignore_index=tokenizer._pad_token_type_id)
@@ -224,7 +225,7 @@ checkpoint = None
 # checkpoint = torch.load(file)
 
 # determine model version and output directory of checkpoints
-out_dir = 'ckpts'
+out_dir = '/cmlscratch/vsahil1/cse493s-hw2/ckpts'
 # !mkdir {model_path}/{out_dir}
 # !ls {model_path}
 
@@ -236,7 +237,6 @@ def main():
     # optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(beta1, beta2))
     # Ablation study
     optimizer = Lion(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(beta1, beta2))
-
     train(model, optimizer, train_dataset, eval_dataset, checkpoint=None, iters=501, out_dir=out_dir)
 
 
@@ -244,74 +244,23 @@ main()
 
 """# Results"""
 
+def plot_losses():
+    # get latest checkpoint
+    file = os.path.join(model_path, out_dir, sorted(os.listdir(os.path.join(model_path, out_dir)))[-1])
+    checkpoint = torch.load(file)
+    print(file)
+    train_losses = checkpoint['train_loss']
+    val_losses = checkpoint['val_loss']
 
-# get latest checkpoint
-file = os.path.join(model_path, out_dir, sorted(os.listdir(os.path.join(model_path, out_dir)))[-1])
-checkpoint = torch.load(file)
-print(file)
-train_losses = checkpoint['train_loss']
-val_losses = checkpoint['val_loss']
+    train_losses = [loss.item() for loss in train_losses]
+    print(len(train_losses))
+    val_losses = [loss.item() for loss in val_losses]
 
-train_losses = [loss.item() for loss in train_losses]
-print(len(train_losses))
-val_losses = [loss.item() for loss in val_losses]
-
-plt.figure(figsize=(10, 5))
-plt.title("Loss during training")
-plt.plot(train_losses, label="Training loss")
-plt.plot((np.arange(len(val_losses)) + 1) * 10, val_losses, label="Validation loss")
-plt.xlabel("iterations")
-plt.ylabel("Loss")
-plt.legend()
-plt.savefig(os.path.join(model_path, "plots"))
-
-"""# Testing"""
-from generation import LLaMA
-import model2 # inference only version
-
-# sys.path.append(os.path.abspath(model_path))
-file = os.path.join(model_path, out_dir, sorted(os.listdir(os.path.join(model_path, out_dir)))[-1])
-checkpoint = torch.load(file)
-model = model2.Transformer(ModelArgs())
-model.to(device)
-model.load_state_dict(checkpoint, strict=False)
-
-generator = LLaMA(model, tokenizer)
-
-prompts = [
-    # For these prompts, the expected answer is the natural continuation of the prompt
-    "I believe the meaning of life is",
-    "Simply put, the theory of relativity states that ",
-    "Building a website can be done in 10 simple steps:\n",
-    # Few shot prompts: https://huggingface.co/blog/few-shot-learning-gpt-neo-and-inference-api
-    """Tweet: "I hate it when my phone battery dies."
-          Sentiment: Negative
-          ###
-          Tweet: "My day has been 👍"
-          Sentiment: Positive
-          ###
-          Tweet: "This is the link to the article"
-          Sentiment: Neutral
-          ###
-          Tweet: "This new music video was incredibile"
-          Sentiment:""",
-    """Translate English to French:
-
-          sea otter => loutre de mer
-
-          peppermint => menthe poivrée
-
-          plush girafe => girafe peluche
-
-          cheese =>""",
-]
-
-tokens = [(tokenizer(x)['input_ids']) for x in prompts] # match list of list of ints format
-print(tokens)
-results = generator.generate(
-    tokens, max_gen_len=256
-)
-
-for result in results:
-    print(result)
-    print("\n==================================\n")
+    plt.figure(figsize=(10, 5))
+    plt.title("Loss during training")
+    plt.plot(train_losses, label="Training loss")
+    plt.plot((np.arange(len(val_losses)) + 1) * 10, val_losses, label="Validation loss")
+    plt.xlabel("iterations")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.savefig(os.path.join(model_path, "plots"))
