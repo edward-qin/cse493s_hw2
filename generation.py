@@ -42,7 +42,7 @@ class LLaMA:
         
         # print("token device", tokens.device)
         for cur_pos in range(start_pos, total_len):
-            logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
+            logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos, train=False)
             # print("logits", logits.shape)
 
             if temperature > 0:

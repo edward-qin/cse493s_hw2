@@ -107,7 +107,7 @@ print(encoding)
 eval_dataset = tokenizer(read_file(val_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
     'input_ids']
 train_dataset = tokenizer(read_file(train_path, entries=500), padding=True, truncation=True, return_tensors="pt")[
-    'input_ids']
+    'input_ids'] # 500 x 512 (seqlen)
 print(type(eval_dataset))
 eval_dataset.to(device)
 train_dataset.to(device)
@@ -162,7 +162,7 @@ def train(
         input_ids, targets = get_batch(train_data)  # type: ignore[union-attr,arg-type]
         input_ids = input_ids.to(device)
         targets = targets.to(device)
-        logits = model.forward(input_ids, 0)
+        logits = model.forward(input_ids, 0, train=True)
         logits = torch.flatten(logits, start_dim=0, end_dim=1)
 
         loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1), ignore_index=tokenizer._pad_token_type_id)
@@ -206,7 +206,7 @@ def validate(model: torch.nn.Module, val_data: np.ndarray) -> torch.Tensor:
         input_ids, targets = get_batch(val_data)  # type: ignore[union-attr,arg-type]
         input_ids = input_ids.to(device)
         targets = targets.to(device)
-        logits = model.forward(input_ids, 0)
+        logits = model.forward(input_ids, 0, train=True)
         logits = torch.flatten(logits, start_dim=0, end_dim=1)
         loss = torch.nn.functional.cross_entropy(logits, targets.reshape(-1), ignore_index=tokenizer._pad_token_type_id)
         loss = loss.detach().cpu().numpy()
@@ -267,12 +267,11 @@ plt.savefig(os.path.join(model_path, "plots"))
 
 """# Testing"""
 from generation import LLaMA
-import model2 # inference only version
 
 # sys.path.append(os.path.abspath(model_path))
 file = os.path.join(model_path, out_dir, sorted(os.listdir(os.path.join(model_path, out_dir)))[-1])
 checkpoint = torch.load(file)
-model = model2.Transformer(ModelArgs())
+model = Transformer(ModelArgs())
 model.to(device)
 model.load_state_dict(checkpoint, strict=False)
 
