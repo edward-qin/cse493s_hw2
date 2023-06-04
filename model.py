@@ -73,6 +73,7 @@ def apply_rotary_emb(
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
     return xq_out.type_as(xq), xk_out.type_as(xk)
 
+
 def xformers_attn(xq, xk, xv, is_causal):
     # NOTE: in another project noticed F.scaled_dot_product gave different
     # results than nn.MultiheadAttention. That is why we have xformers option.
@@ -85,6 +86,7 @@ def xformers_attn(xq, xk, xv, is_causal):
     return xops.memory_efficient_attention(
         xq, xk, xv, attn_bias=mask
     )
+
 
 class Attention(nn.Module):
     def __init__(self, args: ModelArgs):
@@ -198,7 +200,8 @@ class Transformer(nn.Module):
         )
 
 
-    def forward(self, tokens: torch.Tensor, start_pos: int):
+    def forward(self, tokens: torch.Tensor, start_pos: int, train=True):
+        import ipdb; ipdb.set_trace()
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         tokens = tokens.to(h.device)
@@ -213,6 +216,9 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
         h = self.norm(h)
-        output = self.output(h[:, :, :])  # only compute last logits
+        if train:
+            output = self.output(h[:, :, :])
+        else:
+            output = self.output(h[:, -1:, :])  # only compute last logits
         # print(output.shape)
         return output.float()
