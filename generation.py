@@ -5,41 +5,46 @@ from typing import List
 
 import torch
 
-from tokenizer import Tokenizer
-from model import Transformer
+# from tokenizer import Tokenizer
+from model2 import Transformer
 
 
 class LLaMA:
-    def __init__(self, model: Transformer, tokenizer: Tokenizer):
+    def __init__(self, model: Transformer, tokenizer):
         self.model = model
         self.tokenizer = tokenizer
 
     def generate(
         self,
-        prompts: List[str],
+        # prompts: List[str],
+        prompt_tokens,
         max_gen_len: int,
         temperature: float = 0.8,
         top_p: float = 0.95,
     ) -> List[str]:
-        bsz = len(prompts)
+        bsz = len(prompt_tokens)
         params = self.model.params
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
 
-        prompt_tokens = [self.tokenizer.encode(x, bos=True, eos=False) for x in prompts]
+        # prompt_tokens = [self.tokenizer.encode(x, bos=True, eos=False) for x in prompts]
 
         min_prompt_size = min([len(t) for t in prompt_tokens])
         max_prompt_size = max([len(t) for t in prompt_tokens])
 
         total_len = min(params.max_seq_len, max_gen_len + max_prompt_size)
 
-        tokens = torch.full((bsz, total_len), self.tokenizer.pad_id).cuda().long()
+        tokens = torch.full((bsz, total_len), self.tokenizer._pad_token_type_id).cuda().long()
         for k, t in enumerate(prompt_tokens):
             tokens[k, : len(t)] = torch.tensor(t).long()
-        input_text_mask = tokens != self.tokenizer.pad_id
+        input_text_mask = tokens != self.tokenizer._pad_token_type_id
         start_pos = min_prompt_size
         prev_pos = 0
+        
+        # print("token device", tokens.device)
         for cur_pos in range(start_pos, total_len):
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
+            # print("logits", logits.shape)
+
             if temperature > 0:
                 probs = torch.softmax(logits / temperature, dim=-1)
                 next_token = sample_top_p(probs, top_p)
@@ -59,7 +64,7 @@ class LLaMA:
             t = t[: len(prompt_tokens[i]) + max_gen_len]
             # cut to eos tok if any
             try:
-                t = t[: t.index(self.tokenizer.eos_id)]
+                t = t[: t.index(self.tokenizer._eos_token)]
             except ValueError:
                 pass
             decoded.append(self.tokenizer.decode(t))
@@ -70,7 +75,8 @@ def sample_top_p(probs, p):
     probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
     probs_sum = torch.cumsum(probs_sort, dim=-1)
     mask = probs_sum - probs_sort > p
-    probs_sort[mask] = 0.0
+    probs_sort[mask] = 0.
+    # print(probs_sort.shape)
     probs_sort.div_(probs_sort.sum(dim=-1, keepdim=True))
     next_token = torch.multinomial(probs_sort, num_samples=1)
     next_token = torch.gather(probs_idx, -1, next_token)
