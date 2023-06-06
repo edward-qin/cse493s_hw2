@@ -14,6 +14,10 @@ source env/bin/activate
 pip install -r requirements.txt
 ```
 
+### Data
+
+Training and validation data need to be downloaded from [Pile](https://the-eye.eu/public/AI/pile/). We used the first 300K samples of the training data for training and first 10K samples for validation. 
+
 
 ### Training
 
