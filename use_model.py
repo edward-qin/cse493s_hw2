@@ -4,11 +4,12 @@ import sys
 import os
 import numpy as np
 from generation import LLaMA
-import model2   # inference only version
+# import model2   # inference only version
 from model import ModelArgs
+from model import Transformer
 from transformers import AutoTokenizer
 
-import fairscale.nn.model_parallel.initialize as fs_init
+# import fairscale.nn.model_parallel.initialize as fs_init
 
 
 def setup_model_parallel():
@@ -29,15 +30,14 @@ def setup_model_parallel():
     return local_rank, world_size
 
 
-rank, size = setup_model_parallel()
-
+# rank, size = setup_model_parallel()
 
 torch.cuda.empty_cache()
-out_dir = '/cmlscratch/vsahil1/cse493s-hw2/ckpts'
+out_dir = '/nfshomes/vsahil1/cse493s_hw2/ckpts'
 file = os.path.join(out_dir, sorted(os.listdir(os.path.join(out_dir)))[-1])
 print(file)
 checkpoint = torch.load(file)
-model = model2.Transformer(ModelArgs())
+model = Transformer(ModelArgs())
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -76,12 +76,19 @@ prompts = [
           cheese =>""",
 ]
 
-tokens = [(tokenizer(x)['input_ids']) for x in prompts] # match list of list of ints format
-print(tokens)
-results = generator.generate(
-    tokens, max_gen_len=256
-)
+# import ipdb; ipdb.set_trace()
+tokens = [(tokenizer(x)['input_ids']) for x in prompts]     # match list of list of ints format
+# print(tokens)
 
-for result in results:
-    print(result)
+# results = generator.generate(tokens, max_gen_len=256)
+
+# for result in results:
+#     print(result)
+#     print("\n==================================\n")
+
+for id, token in enumerate(tokens):
+    print(prompts[id])
+    token = torch.tensor(token[1:-1]).unsqueeze(0).to(device)       ## removing the CLS and SEP token
     print("\n==================================\n")
+    result = generator.generate_one_prompt(token, max_gen_len=256)
+    print(result)

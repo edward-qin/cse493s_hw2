@@ -217,7 +217,7 @@ class Transformer(nn.Module):
         h = self.norm(h)
         if train:
             # bs x seqlen x vocab_size
-            output = self.output(h[:, :, :])  
+            output = self.output(h[:, :, :])
         else:
             # bs x vocab_size
             output = self.output(h[:, -1, :])   # only compute last logits
