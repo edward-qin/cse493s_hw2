@@ -34,3 +34,5 @@ Once, generated, use the following command to generate the output:
 ```
 python use_model.py
 ```
+
+Custom prompts can be run by modifying the hard-coded prompts in `use_model.py`. Alternatively, one can modify the code to accept an input prompt and pass a tokenized version into the `generate` method.
